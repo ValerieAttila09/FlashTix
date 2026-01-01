@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 
-	"github.com/flashtix/server/internal/domain"
+	"github.com/flashtix/server/db"
 	"github.com/flashtix/server/internal/handlers"
 	"github.com/flashtix/server/internal/middleware"
 	"github.com/flashtix/server/internal/repository/postgres"
@@ -13,8 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	redisClient "github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
-	postgresDriver "gorm.io/driver/postgres"
-	"gorm.io/gorm"
 )
 
 func main() {
@@ -23,14 +22,21 @@ func main() {
 		log.Println("No .env file found")
 	}
 
-	// Database connection
-	db, err := gorm.Open(postgresDriver.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
-	if err != nil {
+	// Initialize Prisma Client
+	client := db.NewClient()
+	if err := client.Prisma.Connect(); err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
+	defer func() {
+		if err := client.Prisma.Disconnect(); err != nil {
+			log.Fatal("Failed to disconnect from database:", err)
+		}
+	}()
 
-	// Auto migrate
-	db.AutoMigrate(&domain.Event{}, &domain.Ticket{}, &domain.User{})
+	// Run migrations (optional, for development)
+	if _, err := client.Prisma.Raw.ExecuteRaw("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"").Exec(context.Background()); err != nil {
+		log.Println("Warning: Could not create uuid extension:", err)
+	}
 
 	// Redis connection
 	rdb := redisClient.NewClient(&redisClient.Options{
@@ -38,8 +44,8 @@ func main() {
 	})
 
 	// Repositories
-	eventRepo := postgres.NewEventRepository(db)
-	ticketRepo := postgres.NewTicketRepository(db)
+	eventRepo := postgres.NewEventRepository(client)
+	ticketRepo := postgres.NewTicketRepository(client)
 	seatLockRepo := redis.NewSeatLockRepository(rdb)
 
 	// Services

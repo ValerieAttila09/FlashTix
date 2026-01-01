@@ -1,5 +1,8 @@
 version: '3.8'
 
+# Note: For production, use Neon (PostgreSQL) and Upstash (Redis) instead of local containers
+# This docker-compose is for local development only
+
 services:
   postgres:
     image: postgres:15

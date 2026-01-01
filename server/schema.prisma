@@ -1,0 +1,97 @@
+// Prisma schema for FlashTix - High-performance ticket booking platform
+// Using PostgreSQL with optimized configuration for concurrent operations
+
+generator go {
+  provider = "go run github.com/steebchen/prisma-client-go"
+  // Enable recursive type generation for better type safety
+  recursiveTypeDepth = 5
+  // Enable package management
+  package = "db"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Enable connection pooling for high concurrency
+  directUrl = env("DATABASE_URL")
+}
+
+// User model with enhanced security and validation
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique @db.VarChar(255)
+  name      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  // Relations
+  tickets Ticket[]
+
+  // Database mapping
+  @@map("users")
+
+  // Indexes for performance
+  @@index([email])
+  @@index([createdAt])
+}
+
+// Event model with capacity management
+model Event {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(255)
+  description String   @db.Text
+  date        DateTime @db.Timestamp(6)
+  venue       String   @db.VarChar(255)
+  capacity    Int      @db.Integer
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  // Relations
+  tickets Ticket[]
+
+  // Database mapping
+  @@map("events")
+
+  // Indexes for performance
+  @@index([date])
+  @@index([venue])
+  @@index([createdAt])
+}
+
+// Ticket model optimized for high-concurrency booking
+model Ticket {
+  id            String       @id @default(cuid())
+  eventId       String       @map("event_id")
+  userId        String?      @map("user_id")
+  seat          String       @db.VarChar(50)
+  status        TicketStatus @default(AVAILABLE)
+  price         Float        @default(0) @db.Real
+  reservedUntil DateTime?    @map("reserved_until") @db.Timestamp(6)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  // Relations with referential actions
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Database mapping
+  @@map("tickets")
+
+  // Critical indexes for booking performance
+  @@index([eventId, seat]) // Unique seat per event
+  @@index([eventId, status]) // Filter available tickets by event
+  @@index([status, reservedUntil]) // Find expired reservations
+  @@index([userId, status]) // User's tickets by status
+  @@index([createdAt])
+  @@index([updatedAt])
+
+  // Unique constraint for seat per event
+  @@unique([eventId, seat])
+}
+
+// Enum for ticket status with clear states
+enum TicketStatus {
+  AVAILABLE // Ticket is available for booking
+  RESERVED  // Ticket is temporarily reserved
+  SOLD      // Ticket has been sold
+}
