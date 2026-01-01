@@ -1,0 +1,14 @@
+{
+  "name": "Go + Node.js Dev Container",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "latest",
+      "installYarn": true
+    }
+  },
+  "postCreateCommand": "go version && node -v && npm -v"
+}
