@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/flashtix/server/db"
 	"github.com/flashtix/server/internal/handlers"
@@ -12,7 +13,6 @@ import (
 	"github.com/flashtix/server/internal/repository/redis"
 	"github.com/flashtix/server/internal/services"
 	"github.com/gin-gonic/gin"
-	redisClient "github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 )
 
@@ -38,15 +38,21 @@ func main() {
 		log.Println("Warning: Could not create uuid extension:", err)
 	}
 
-	// Redis connection
-	rdb := redisClient.NewClient(&redisClient.Options{
-		Addr: os.Getenv("REDIS_URL"),
-	})
+	// Redis connection (Upstash)
+	redisURL := os.Getenv("UPSTASH_REDIS_REST_URL")
+	redisToken := os.Getenv("UPSTASH_REDIS_REST_TOKEN")
+
+	if redisURL == "" || redisToken == "" {
+		log.Println("Warning: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN not set")
+		log.Println("Redis features (seat locking) will not work properly")
+		redisURL = "https://dummy.upstash.io" // dummy URL to prevent panic
+		redisToken = "dummy"
+	}
 
 	// Repositories
 	eventRepo := postgres.NewEventRepository(client)
 	ticketRepo := postgres.NewTicketRepository(client)
-	seatLockRepo := redis.NewSeatLockRepository(rdb)
+	seatLockRepo := redis.NewSeatLockRepository(redisURL, redisToken)
 
 	// Services
 	ticketService := services.NewTicketService(ticketRepo, eventRepo, seatLockRepo)
@@ -65,8 +71,50 @@ func main() {
 	// Routes
 	api := r.Group("/api")
 	{
+		// Root endpoint untuk informasi API
+		api.GET("/", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"message": "FlashTix API Server",
+				"version": "1.0.0",
+				"endpoints": gin.H{
+					"GET /api/":                 "API information",
+					"GET /api/events":           "Get all events",
+					"POST /api/events":          "Create new event",
+					"GET /api/redis-test":       "Test Redis connection",
+					"POST /api/tickets/reserve": "Reserve a ticket seat (requires auth)",
+					"POST /api/tickets/confirm": "Confirm ticket purchase (requires auth)",
+				},
+			})
+		})
+
 		api.GET("/events", eventHandler.GetEvents)
 		api.POST("/events", eventHandler.CreateEvent)
+
+		// Test Redis endpoint
+		api.GET("/redis-test", func(c *gin.Context) {
+			ctx := context.Background()
+			testValue := "Hello from Upstash Redis!"
+
+			// Test SET
+			err := seatLockRepo.LockSeat(ctx, "test", "test", testValue, 60*time.Second)
+			if err != nil {
+				c.JSON(500, gin.H{"error": "Failed to set Redis key", "details": err.Error()})
+				return
+			}
+
+			// Test GET
+			retrievedValue, err := seatLockRepo.IsSeatLocked(ctx, "test", "test")
+			if err != nil {
+				c.JSON(500, gin.H{"error": "Failed to get Redis key", "details": err.Error()})
+				return
+			}
+
+			c.JSON(200, gin.H{
+				"message":         "Redis Upstash connection successful!",
+				"set_value":       testValue,
+				"retrieved_value": retrievedValue,
+			})
+		})
 
 		auth := api.Group("")
 		auth.Use(middleware.AuthMiddleware(os.Getenv("JWT_SECRET")))

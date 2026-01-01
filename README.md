@@ -71,13 +71,23 @@ Platform pemesanan tiket event high-concurrency menggunakan Go dan React.
    DATABASE_URL=postgresql://username:password@hostname/database?sslmode=require
    ```
 
-### Redis (Upstash)
+### Redis (Upstash - RECOMMENDED)
 1. Create account di [upstash.com](https://upstash.com)
 2. Create Redis database
-3. Copy connection string ke `.env`:
+3. Copy REST API credentials ke `.env`:
    ```
-   REDIS_URL=rediss://username:password@hostname:port
+   UPSTASH_REDIS_REST_URL=https://your-database.upstash.io
+   UPSTASH_REDIS_REST_TOKEN=your-rest-token
    ```
+
+   **Catatan**: FlashTix menggunakan Upstash REST API untuk koneksi Redis yang lebih reliable dan tidak memerlukan TCP connection.
+
+### Redis (Local Development)
+Untuk development lokal, Anda bisa menggunakan:
+1. **Docker**: `docker run -d -p 6379:6379 redis:7-alpine`
+2. **Local install**: Install Redis server dan set `REDIS_URL=localhost:6379`
+
+**Catatan**: Redis digunakan untuk optimistic locking pada sistem booking tiket untuk mencegah race conditions saat high-concurrency booking.
 
 ## Prisma Commands
 

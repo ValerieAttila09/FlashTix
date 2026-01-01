@@ -2,6 +2,11 @@ version: '3.8'
 
 # Note: For production, use Neon (PostgreSQL) and Upstash (Redis) instead of local containers
 # This docker-compose is for local development only
+#
+# Production Setup:
+# - PostgreSQL: Use Neon (https://neon.tech)
+# - Redis: Use Upstash (https://upstash.com) for serverless Redis
+# - Update .env with cloud URLs instead of localhost
 
 services:
   postgres:
@@ -14,6 +19,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Uncomment for local development
+    # profiles: ["local"]
 
   redis:
     image: redis:7-alpine
@@ -21,6 +28,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    # Uncomment for local development
+    # profiles: ["local"]
 
 volumes:
   postgres_data:
